@@ -3,7 +3,7 @@
  * Plugin Name:       Easy appointments frontend form
  * Plugin URI:        https://github.com/abkarim/easy-appointments-frontend-form
  * Description:       view appointments in frontend by using shortcode "[Easy_Appointments_Frontend_FormShortcode]"
- * Version:           0.1.0
+ * Version:           0.1.1
  * Requires at least: 5.2
  * Requires PHP:      7.4
  * Author:            Karim
@@ -62,6 +62,45 @@ if (!class_exists("Easy_Appointments_Frontend_Form")) {
         }
 
         /**
+         * Get user data 
+         * 
+         * @param int app_id
+         * @return array [email, name, number]
+         * @since 0.1.1
+         * @access private
+         */
+        private function get_user_data($app_id) {
+            global  $wpdb;
+            $fields_table_name = $wpdb->prefix . 'ea_fields';
+
+            $email = "";
+            $number = "";
+            $name = "";
+
+            $query = "SELECT field_id, value FROM $fields_table_name WHERE app_id = $app_id";
+
+            $data = $wpdb->get_results($query, ARRAY_A );
+
+            if(count($data) !== 0) {
+                foreach($data as $currentData) {
+                    if(intval($currentData['field_id']) === 1) {
+                        $email =  $currentData['value'];
+                    }
+                    if(intval($currentData['field_id']) === 2) {
+                        $name =  $currentData['value'];
+                    }
+                    if(intval($currentData['field_id']) === 3) {
+                        $number =  $currentData['value'];
+                    }
+                }
+            }
+
+            return [$email, $name, $number];
+
+        }
+
+
+        /**
          * Get appointments 
          * 
          * @param string date
@@ -78,9 +117,7 @@ if (!class_exists("Easy_Appointments_Frontend_Form")) {
 
             $query = "
             SELECT 
-                $appointments_table_name.name, 
-                $appointments_table_name.email, 
-                $appointments_table_name.phone, 
+                $appointments_table_name.id, 
                 $appointments_table_name.date, 
                 $appointments_table_name.start, 
                 $appointments_table_name.end, 
@@ -97,7 +134,7 @@ if (!class_exists("Easy_Appointments_Frontend_Form")) {
             WHERE $appointments_table_name.date = '$date'";
 
             // Execute query
-            $data = $wpdb->get_results($query, OBJECT_K );
+            $data = $wpdb->get_results($query, ARRAY_A );
 
             if (count($data) !== 0) {
                 return $data;
@@ -148,16 +185,16 @@ if (!class_exists("Easy_Appointments_Frontend_Form")) {
                          * Table heading
                          */
                         $results .= "<thead>
-                                        <th>#</th>
-                                        <th>Appointment Date</th>
-                                        <th>Appointment Time</th>
-                                        <th>Name</th>
-                                        <th>Email</th>
-                                        <th>Phone</th>
-                                        <th>Service Name</th>
-                                        <th>Location</th>
-                                        <th>Appointment To</th>
-                                        <th>Appointment Status</th>
+                                        <th style='border: 1px solid black; border-collapse: collapse;'>#</th>
+                                        <th style='border: 1px solid black; border-collapse: collapse;'>Appointment Date</th>
+                                        <th style='border: 1px solid black; border-collapse: collapse;'>Appointment Time</th>
+                                        <th style='border: 1px solid black; border-collapse: collapse;'>Name</th>
+                                        <th style='border: 1px solid black; border-collapse: collapse;'>Email</th>
+                                        <th style='border: 1px solid black; border-collapse: collapse;'>Phone</th>
+                                        <th style='border: 1px solid black; border-collapse: collapse;'>Service Name</th>
+                                        <th style='border: 1px solid black; border-collapse: collapse;'>Location</th>
+                                        <th style='border: 1px solid black; border-collapse: collapse;'>Appointment To</th>
+                                        <th style='border: 1px solid black; border-collapse: collapse;'>Appointment Status</th>
                                     </thead>";
 
                         /**
@@ -168,19 +205,23 @@ if (!class_exists("Easy_Appointments_Frontend_Form")) {
                         /**
                          * Table row with results
                          */
-                        foreach($data as $index => $appointment ) {
-                            $results .= "<tr>
-                                            <td>$index</td>
-                                            <td>$appointment->date</td>
-                                            <td>$appointment->start - $appointment->end</td>
-                                            <td>$appointment->name</td>
-                                            <td>$appointment->email</td>
-                                            <td>$appointment->phone</td>
-                                            <td>$appointment->service_name</td>
-                                            <td>$appointment->location_address</td>
-                                            <td>$appointment->staff_name</td>
-                                            <td>$appointment->status</td>
+                        $index = 1;
+                        foreach($data as $appointment ) {
+                            $backgroundColor = $index % 2 == 0 ? '#E8E9EB' : 'white';
+                            [$email, $name, $number] = $this->get_user_data($appointment['id']);
+                            $results .= "<tr style='background-color: $backgroundColor;'>
+                                            <td style='border: 1px solid black; border-collapse: collapse;'>$index</td>
+                                            <td style='border: 1px solid black; border-collapse: collapse;'>". $appointment['date'] ."</td>
+                                            <td style='border: 1px solid black; border-collapse: collapse;'>". $appointment['start'] . " - ".$appointment['end'] ."</td>
+                                            <td style='border: 1px solid black; border-collapse: collapse;'>$name</td>
+                                            <td style='border: 1px solid black; border-collapse: collapse;'>$email</td>
+                                            <td style='border: 1px solid black; border-collapse: collapse;'>$number</td>
+                                            <td style='border: 1px solid black; border-collapse: collapse;'>".$appointment['service_name']."</td>
+                                            <td style='border: 1px solid black; border-collapse: collapse;'>".$appointment['location_address']. "</td>
+                                            <td style='border: 1px solid black; border-collapse: collapse;'>".$appointment['staff_name']. "</td>
+                                            <td style='border: 1px solid black; border-collapse: collapse;'>".$appointment['status'] ."</td>
                                         </tr>";
+                            $index += 1;
                         }
 
                         /**
@@ -212,7 +253,7 @@ if (!class_exists("Easy_Appointments_Frontend_Form")) {
              */
             $html .= "<div>
                         <h3>$date</h3>
-                        <table>
+                        <table style='border: 1px solid black; border-collapse: collapse;'>
                             $results
                         </table>
                     </div>";                
