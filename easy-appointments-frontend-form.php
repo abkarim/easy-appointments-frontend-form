@@ -3,7 +3,7 @@
  * Plugin Name:       Easy appointments frontend form
  * Plugin URI:        https://github.com/abkarim/easy-appointments-frontend-form
  * Description:       view appointments in frontend by using shortcode "[Easy_Appointments_Frontend_FormShortcode]"
- * Version:           0.1.1
+ * Version:           0.1.2
  * Requires at least: 5.2
  * Requires PHP:      7.4
  * Author:            Karim
@@ -65,7 +65,7 @@ if (!class_exists("Easy_Appointments_Frontend_Form")) {
          * Get user data 
          * 
          * @param int app_id
-         * @return array [email, name, number]
+         * @return array valid_data
          * @since 0.1.1
          * @access private
          */
@@ -73,30 +73,15 @@ if (!class_exists("Easy_Appointments_Frontend_Form")) {
             global  $wpdb;
             $fields_table_name = $wpdb->prefix . 'ea_fields';
 
-            $email = "";
-            $number = "";
-            $name = "";
-
-            $query = "SELECT field_id, value FROM $fields_table_name WHERE app_id = $app_id";
+            $query = "SELECT field_id, value FROM $fields_table_name WHERE app_id = $app_id ORDER BY field_id ASC";
 
             $data = $wpdb->get_results($query, ARRAY_A );
 
             if(count($data) !== 0) {
-                foreach($data as $currentData) {
-                    if(intval($currentData['field_id']) === 1) {
-                        $email =  $currentData['value'];
-                    }
-                    if(intval($currentData['field_id']) === 2) {
-                        $name =  $currentData['value'];
-                    }
-                    if(intval($currentData['field_id']) === 3) {
-                        $number =  $currentData['value'];
-                    }
-                }
+                return $data;
             }
-
-            return [$email, $name, $number];
-
+            
+            return [];
         }
 
 
@@ -152,8 +137,22 @@ if (!class_exists("Easy_Appointments_Frontend_Form")) {
          * @return string
          * @access public
          */
-        public function render_forms_html() {
+        public function render_forms_html($atts=[]) {
 
+            $selectedFields = isset($atts["fields"]) ? $atts["fields"] : null;
+            $fields_with_name = [];
+
+            if($selectedFields) {
+                /**
+                 * It should be in json format
+                 */
+                $decodedFields = json_decode($selectedFields, true);
+                if($decodedFields){
+                    $fields_with_name = $decodedFields;
+                }
+            }
+
+         
             /**
              * Container
              */
@@ -164,6 +163,8 @@ if (!class_exists("Easy_Appointments_Frontend_Form")) {
              */
             $results = "";
             $date = "";
+            $tableHeader = "";
+            $tableBody = "";
 
             /**
              * Get form data
@@ -181,26 +182,17 @@ if (!class_exists("Easy_Appointments_Frontend_Form")) {
                     if(is_null($data)) {
                         $results .= "Sorry, no appointments found";
                     }else {
-                        /**
-                         * Table heading
-                         */
-                        $results .= "<thead>
-                                        <th style='border: 1px solid black; border-collapse: collapse;'>#</th>
-                                        <th style='border: 1px solid black; border-collapse: collapse;'>Appointment Date</th>
-                                        <th style='border: 1px solid black; border-collapse: collapse;'>Appointment Time</th>
-                                        <th style='border: 1px solid black; border-collapse: collapse;'>Name</th>
-                                        <th style='border: 1px solid black; border-collapse: collapse;'>Email</th>
-                                        <th style='border: 1px solid black; border-collapse: collapse;'>Phone</th>
-                                        <th style='border: 1px solid black; border-collapse: collapse;'>Service Name</th>
-                                        <th style='border: 1px solid black; border-collapse: collapse;'>Location</th>
-                                        <th style='border: 1px solid black; border-collapse: collapse;'>Appointment To</th>
-                                        <th style='border: 1px solid black; border-collapse: collapse;'>Appointment Status</th>
-                                    </thead>";
-
+                   
                         /**
                          * Table body start
                          */
-                        $results .= "<tbody>";
+                        $tableBody = "<tbody>";
+
+                        /**
+                         * Headers fields array
+                         * fields id
+                         */
+                        $headerFieldsArray = [];
 
                         /**
                          * Table row with results
@@ -208,15 +200,50 @@ if (!class_exists("Easy_Appointments_Frontend_Form")) {
                         $index = 1;
                         foreach($data as $appointment ) {
                             $backgroundColor = $index % 2 == 0 ? '#E8E9EB' : 'white';
-                            [$email, $name, $number] = $this->get_user_data($appointment['id']);
-                            $results .= "<tr style='background-color: $backgroundColor;'>
+                            $fieldsArray = $this->get_user_data($appointment['id']);
+                            $fields_rows = "";
+
+                            /**
+                             * Prepare fields row
+                             * 
+                             * add every 
+                             */
+                            foreach($fieldsArray as $field) {
+                                $field_id = intval($field['field_id']);
+
+                                /**
+                                 * When ge got fields name
+                                 */
+                                if(count($fields_with_name) !== 0) {
+                                    if(isset($fields_with_name[$field_id])) {
+                                        if(!in_array($field_id, $headerFieldsArray)) {
+                                            array_push($headerFieldsArray, $field_id);
+                                        }
+                                        
+                                        $value = $field['value'];
+                                        $fields_rows .= "<td style='border: 1px solid black; border-collapse: collapse;'>$value</td>";                                
+                                    }
+                                    
+                                }else {   
+                                    if(!in_array($field_id, $headerFieldsArray)) {
+                                        array_push($headerFieldsArray, $field_id);
+                                    }
+                                    
+                                    $value = $field['value'];
+                                    $fields_rows .= "<td style='border: 1px solid black; border-collapse: collapse;'>$value</td>";                                
+                                }
+                            }
+
+
+                            /**
+                             * Prepare rows
+                             */
+                            $tableBody .= "<tr style='background-color: $backgroundColor;'>
                                             <td style='border: 1px solid black; border-collapse: collapse;'>$index</td>
                                             <td style='border: 1px solid black; border-collapse: collapse;'>". $appointment['date'] ."</td>
-                                            <td style='border: 1px solid black; border-collapse: collapse;'>". $appointment['start'] . " - ".$appointment['end'] ."</td>
-                                            <td style='border: 1px solid black; border-collapse: collapse;'>$name</td>
-                                            <td style='border: 1px solid black; border-collapse: collapse;'>$email</td>
-                                            <td style='border: 1px solid black; border-collapse: collapse;'>$number</td>
-                                            <td style='border: 1px solid black; border-collapse: collapse;'>".$appointment['service_name']."</td>
+                                            <td style='border: 1px solid black; border-collapse: collapse;'>". $appointment['start'] . " - ".$appointment['end'] ."</td>".
+                                            $fields_rows
+                                            ."<td style='border: 1px solid black; border-collapse: collapse;'>".$appointment['service_name']."</td>
                                             <td style='border: 1px solid black; border-collapse: collapse;'>".$appointment['location_address']. "</td>
                                             <td style='border: 1px solid black; border-collapse: collapse;'>".$appointment['staff_name']. "</td>
                                             <td style='border: 1px solid black; border-collapse: collapse;'>".$appointment['status'] ."</td>
@@ -227,7 +254,34 @@ if (!class_exists("Easy_Appointments_Frontend_Form")) {
                         /**
                          * Table body end
                          */
-                        $results .= "</tbody>"; 
+                        $tableBody .= "</tbody>"; 
+
+                        $headerFieldsString = "";
+
+                        foreach($headerFieldsArray as $field_id) {
+                            $name = $field_id;
+
+                            if(count($fields_with_name) !==0 ) {
+                                $name = $fields_with_name[$name];
+                            } 
+
+                            $headerFieldsString .= "<th style='border: 1px solid black; border-collapse: collapse;'>$name</th>";
+                        }
+
+                        /**
+                         * Table heading
+                         */
+                        $tableHeader = "<thead>
+                                        <th style='border: 1px solid black; border-collapse: collapse;'>#</th>
+                                        <th style='border: 1px solid black; border-collapse: collapse;'>Appointment Date</th>
+                                        <th style='border: 1px solid black; border-collapse: collapse;'>Appointment Time</th>
+                                        $headerFieldsString
+                                        <th style='border: 1px solid black; border-collapse: collapse;'>Service Name</th>
+                                        <th style='border: 1px solid black; border-collapse: collapse;'>Location</th>
+                                        <th style='border: 1px solid black; border-collapse: collapse;'>Appointment To</th>
+                                        <th style='border: 1px solid black; border-collapse: collapse;'>Appointment Status</th>
+                                    </thead>";
+
                     }
 
                 }
@@ -254,7 +308,8 @@ if (!class_exists("Easy_Appointments_Frontend_Form")) {
             $html .= "<div>
                         <h3>$date</h3>
                         <table style='border: 1px solid black; border-collapse: collapse;'>
-                            $results
+                            $tableHeader
+                            $tableBody
                         </table>
                     </div>";                
             $html .= "</section>";
